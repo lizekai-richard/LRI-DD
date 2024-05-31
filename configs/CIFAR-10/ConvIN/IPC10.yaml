@@ -1,0 +1,37 @@
+dataset: CIFAR10
+device: [4,5]
+
+ipc: 10
+syn_steps: 80
+expert_epochs: 2
+zca: False
+lr_img: 100
+lr_teacher: 0.01
+buffer_path: /home/kwang/big_space/lzk/buffer_storage/cl_grand_75_20_01
+data_path: ../dataset
+ema_decay: 0.9995
+Iteration: 10000
+batch_syn: 500
+
+# wandb
+project: CIFAR10_ipc10
+name: test
+
+num_eval: 1
+eval_it: 500
+skip_first_eva: True
+
+lr_y: 2.0
+Momentum_y: 0.9
+threshold: 1.
+pix_init: samples_predicted_correctly
+batch_train: 128
+
+min_start_epoch: 0
+current_max_start_epoch: 10
+max_start_epoch: 20
+expansion_end_epoch: 1000
+
+lr_lr: 0.00001
+zca: True
+
