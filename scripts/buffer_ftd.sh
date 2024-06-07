@@ -13,4 +13,4 @@ nohup python3 buffer_FTD.py \
 --lr_teacher=0.01 \
 --mom=0. \
 --batch_train=256 \
-> ../logs/train_teacher_trajectories_tiny.log 2>&1 &
+> ../train_teacher_trajectories_tiny.log 2>&1 &
