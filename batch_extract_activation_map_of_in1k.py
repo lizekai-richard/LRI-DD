@@ -31,7 +31,7 @@ preprocess = transforms.Compose([
 
 # 创建数据集和数据加载器
 dataset = datasets.ImageFolder(root=input_root_dir, transform=preprocess)
-dataloader = DataLoader(dataset, batch_size=10, shuffle=False, num_workers=4)  # 根据需要调整batch_size和num_workers
+dataloader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=4)  # 根据需要调整batch_size和num_workers
 
 
 # 遍历数据加载器并生成CAM
@@ -39,7 +39,10 @@ total_batches = len(dataloader)
 for batch_idx, batch in enumerate(tqdm(dataloader, total=total_batches, desc="Processing Batches")):
     inputs, targets = batch
     inputs = inputs.to(device)
-    paths = [dataset.samples[i][0] for i in range(inputs.size(0))]
+    paths = [dataset.samples[i][0] for i in range(batch_idx * 10, batch_idx * 10 + len(inputs))]
+    # import pdb; pdb.set_trace()
+    # paths = [dataset.samples[i][0] for i in range(inputs.size(0))]
+    # print(paths[0])
     # import pdb; pdb.set_trace()
 
     for target_layer in target_layers:
