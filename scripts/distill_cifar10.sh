@@ -1,6 +1,6 @@
 cd distill
 
-CFG="../configs/CIFAR-10/ConvIN/IPC500.yaml"
+CFG="../configs/CIFAR-10/ConvIN/IPC10.yaml"
 
-nohup python3 DATM.py --cfg $CFG \
-> ../logs/distill_cifar10_ipc500_cl_40_20_0005.log 2>&1 &
+nohup python3 distill_loss.py --cfg $CFG \
+> ../logs/lri_dd_cifar10_ipc10_loss.log 2>&1 &
