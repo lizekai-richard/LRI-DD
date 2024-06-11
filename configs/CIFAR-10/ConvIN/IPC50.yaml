@@ -1,20 +1,20 @@
 dataset: CIFAR10
-device: [0,1,2,4]
+device: [2,3,4,5,6]
 
 ipc: 50
 syn_steps: 80
 expert_epochs: 2
 lr_img: 1000
 lr_teacher: 0.01
-buffer_path: /home/kwang/big_space/lzk/buffer_storage/cl_grand_75_20_01/
-data_path: ../dataset
+buffer_path: /home/kwang/big_space/lzk/buffer_storage/cifar10/
+data_path: /home/kwang/big_space/lzk/dataset
 ema_decay: 0.995
 Iteration: 10000
 batch_syn: 500
 
 # wandb
-project: CIFAR10_ipc50
-name: cl_grand_75_20_01
+project: LRI-DD
+name: cifar10_ipc50_loss
 
 num_eval: 1
 eval_it: 500
@@ -32,5 +32,4 @@ max_start_epoch: 40
 lr_lr: 0.00001
 zca: True
 
-# loss_threshold_low: 0.5
-# loss_threshold_high: 1.0
+loss_threshold_low: 0.7
