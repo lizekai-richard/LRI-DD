@@ -25,6 +25,7 @@ CFG.subset = 'imagenette'
 
 # model
 CFG.model = 'ConvNet'
+CFG.activation_model_path = "/home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet18_best.pt"
 
 # image(s) per class
 CFG.ipc = 1

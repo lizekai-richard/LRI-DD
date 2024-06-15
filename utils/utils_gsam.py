@@ -10,7 +10,7 @@ import os
 import kornia as K
 import tqdm
 from torch.utils.data import Dataset, DataLoader
-from torchvision import datasets, transforms
+from torchvision import datasets, transforms, models
 from scipy.ndimage.interpolation import rotate as scipyrotate
 from networks import MLP, ConvNet, LeNet, AlexNet, VGG11BN, VGG11, ResNet18, ResNet18BN_AP, ResNet18_AP, ResNet18BN
 
@@ -276,6 +276,8 @@ def get_network(model, channel, num_classes, im_size=(32, 32), dist=True):
         net = ResNet18BN_AP(channel=channel, num_classes=num_classes)
     elif model == 'ResNet18_AP':
         net = ResNet18_AP(channel=channel, num_classes=num_classes)
+    elif model == 'ResNet50':
+        net = models.resnet50(pretrained=False, num_classes=num_classes)
 
     elif model == 'ConvNetD1':
         net = ConvNet(channel=channel, num_classes=num_classes, net_width=net_width, net_depth=1, net_act=net_act, net_norm=net_norm, net_pooling=net_pooling, im_size=im_size)

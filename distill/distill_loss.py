@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import torchvision.utils
 from tqdm import tqdm
 from utils.utils_baseline import get_dataset, get_network, get_eval_pool, evaluate_synset, get_time, DiffAugment, plot_loss, ParamDiffAug
+from utils.gradcam import get_activation_maps
 import wandb
 import copy
 import random
@@ -27,6 +28,22 @@ def manual_seed(seed=0):
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
 	torch.cuda.manual_seed_all(seed)
+
+
+def create_soft_mask(activation_maps, num_classes, ipc, descending=False):
+    # activation_map: [num_classes * ipc, h, w]
+    softmask = torch.zeros_like(activation_maps)
+    if not descending:
+        for c in range(num_classes):
+            factor = torch.sum(torch.exp(1.0 * activation_maps[c * ipc: (c + 1) * ipc]))
+            softmask[c * ipc: (c + 1) * ipc] = torch.exp(1.0 * activation_maps[c * ipc: (c + 1) * ipc]) / factor 
+    else:
+        for c in range(num_classes):
+            factor = torch.sum(torch.exp(-1.0 * activation_maps[c * ipc: (c + 1) * ipc]))
+            softmask[c * ipc: (c + 1) * ipc] = torch.exp(-1.0 * activation_maps[c * ipc: (c + 1) * ipc]) / factor 
+    softmask = softmask.unsqueeze(dim=1)
+    return softmask
+
 
 def main(args):
 
@@ -247,8 +264,6 @@ def main(args):
     optimizer_img = torch.optim.SGD([image_syn], lr=args.lr_img, momentum=0.5)
     optimizer_lr = torch.optim.SGD([syn_lr], lr=args.lr_lr, momentum=0.5)
 
-
-    
     optimizer_img.zero_grad()
 
     ###
@@ -327,6 +342,9 @@ def main(args):
     label_syn.requires_grad=True
     label_syn = label_syn.to(args.device)
     
+    activation_maps = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, 
+                                          model_path=args.activation_model_path, dataset=args.dataset)
+    print("Size of activation maps: ", activation_maps.size())
 
     optimizer_y = torch.optim.SGD([label_syn], lr=args.lr_y, momentum=args.Momentum_y)
     vs = torch.zeros_like(label_syn)
@@ -568,6 +586,15 @@ def main(args):
         optimizer_y.zero_grad()
         
         grand_loss.backward()
+
+        if (it // 500) % 2 == 0:
+            mask = create_soft_mask(activation_maps, num_classes, args.ipc, descending=True)
+            print(mask.size())
+            print(image_syn.grad.size())
+            image_syn.grad *= mask
+        else:
+            mask = create_soft_mask(activation_maps, num_classes, args.ipc)
+            image_syn.grad *= mask
 
         if grand_loss<=args.threshold:
             optimizer_y.step()

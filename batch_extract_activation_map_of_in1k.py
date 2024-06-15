@@ -15,8 +15,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = resnet18(pretrained=True).eval().to(device)
 
 # 输入图像和保存CAM图像的根目录
-input_root_dir = "/data/common/ImageNet-100/v100/train"
-output_root_dir = "/home/nus-wk/activation_map_of_IN1K/batch_in1k"
+input_root_dir = "/home/kwang/big_space/datasets/imagenet/train"
+output_root_dir = "/home/kwang/big_space/lzk/activation_map_of_IN1K/batch_in1k"
 
 # 需要展示的层
 target_layers = ['layer1', 'layer2', 'layer3', 'layer4']
@@ -73,7 +73,6 @@ for batch_idx, batch in enumerate(tqdm(dataloader, total=total_batches, desc="Pr
                 plt.tight_layout()
                 plt.savefig(overlay_cam_path)
                 plt.close()
-
                 #################
 
 
