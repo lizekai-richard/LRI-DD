@@ -4,34 +4,34 @@ import requests
 import torch
 import cv2
 import numpy as np
+import torchvision.transforms.functional as F
 from transformers import MobileViTImageProcessor, MobileViTV2ForImageClassification
 from PIL import Image
 from torchvision import datasets, transforms
 from torch.utils.data import Subset, DataLoader
 from tqdm import tqdm
-from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
-from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
+from torchcam.methods import SmoothGradCAMpp
+from torchcam.utils import overlay_mask
 
 
 def get_imagenet_1k(data_path):
     channel = 3
-    im_size = (128, 128)
     num_classes = 1000
 
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
 
-    transform = transforms.Compose([transforms.ToTensor(),
-                                    transforms.Normalize(mean=mean, std=std),
-                                    transforms.Resize(im_size),
-                                    transforms.CenterCrop(im_size)])
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize((224, 224)),
+        transforms.Normalize(mean=mean, std=std)
+    ])
 
-    # dst_train = datasets.ImageFolder(os.path.join(data_path, "train"), transform=transform)  # no augmentation
-    # dst_test = datasets.ImageFolder(os.path.join(data_path, "val"), transform=transform)
+    dst_train = datasets.ImageFolder(os.path.join(data_path, "train"), transform=transform)  # no augmentation
+    dst_test = datasets.ImageFolder(os.path.join(data_path, "val"), transform=transform)
 
-    dst_train = datasets.ImageFolder(os.path.join(data_path, "train"))
-    dst_test = datasets.ImageFolder(os.path.join(data_path, "val"))
+    # dst_train = datasets.ImageFolder(os.path.join(data_path, "train"))
+    # dst_test = datasets.ImageFolder(os.path.join(data_path, "val"))
 
     class_names = dst_train.classes
     class_map = {x: x for x in range(num_classes)}
@@ -46,7 +46,7 @@ def get_model(model_path):
     return processor, model
 
 
-def object_size_by_class(dst_train, class_num, processor, model, batch_size=32, device='cuda:0'):
+def object_size_by_class(dst_train, class_num, model, batch_size=32, device='cuda:0'):
     train_indices = torch.arange(len(dst_train))
     targets = torch.tensor(dst_train.targets, dtype=torch.long)
     class_indices = train_indices[targets == class_num]
@@ -54,22 +54,25 @@ def object_size_by_class(dst_train, class_num, processor, model, batch_size=32, 
     class_subset = Subset(dst_train, class_indices)
 
     data_loader = DataLoader(class_subset, batch_size=batch_size, shuffle=False)
+    total_batches = len(data_loader)
+    
+    target_layers = [model.mobilevitv2.encoder.layer[3]]
+    cam = SmoothGradCAMpp(model=model, target_layers=target_layers)
 
-    with torch.inference_mode():
-        target_layers = [model.mobilevitv2.encoder.layer[3]]
-        cam = GradCAMPlusPlus(model=model, target_layers=target_layers)
-        # cam.batch_size = batch_size
-        for image, label in tqdm(class_subset):
-            image = np.array(image)
-            image = cv2.resize(image, (224, 224))
-            image = np.float32(image) / 255
-            input_tensor = preprocess_image(image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            print(input_tensor)
-            targets = [ClassifierOutputTarget(label)]
-            grayscale_cam = cam(input_tensor=input_tensor)
-            cam_image = show_cam_on_image(image, grayscale_cam[0, :], use_rgb=True)
-            print(cam_image)
-            break
+    total_object_size = 0
+    for batch_idx, (images, labels) in enumerate(tqdm(data_loader, total=total_batches, desc="Processing Batches")):
+        images = images.to(device)
+        paths = [class_subset.samples[i][0] for i in range(batch_idx * batch_size, batch_idx * batch_size + len(images))]
+        
+        outputs = model(images)
+        activation_maps = cam(labels.tolist(), outputs)
+
+        for i in range(len(activation_maps[0])):
+            image = Image.open(paths[i]).convert('RGB')
+            cam_img = F.to_pil_image(activation_maps[0][i].squeeze(0), mode='F')
+            cam_img = cam_img.resize(image.size)
+            result = overlay_mask(image, cam_img, alpha=0.5)
+            print(result.size())
     # return cam_images
             
 
@@ -87,7 +90,8 @@ if __name__ == '__main__':
     model_path = "/home/kwang/big_space/lzk/mobilevit-v2-imagenet1k"
     processor, model = get_model(model_path)
     # processor = processor.to(device)
-    model = model.to(device)
+    model = model.to(device).eval()
 
-    object_size_by_class(dst_train, 0, processor, model)
+    for class_label in range(num_classes):
+        object_size_by_class(dst_train, class_label, model, device=device)
 
