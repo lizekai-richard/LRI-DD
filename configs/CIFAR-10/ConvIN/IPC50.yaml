@@ -1,5 +1,5 @@
 dataset: CIFAR10
-device: [2,3,4,5,6]
+device: [1,2,5,6]
 
 ipc: 50
 syn_steps: 80
@@ -14,7 +14,7 @@ batch_syn: 500
 
 # wandb
 project: LRI-DD
-name: cifar10_ipc50_loss
+name: cifar10_ipc50_loss_with_activation
 
 num_eval: 1
 eval_it: 500
@@ -33,3 +33,4 @@ lr_lr: 0.00001
 zca: True
 
 loss_threshold_low: 0.7
+activation_model_path: /home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet18_best.pt

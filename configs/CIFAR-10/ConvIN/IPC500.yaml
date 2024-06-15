@@ -36,5 +36,5 @@ zca: True
 expansion_end_epoch: 1000
 
 loss_threshold_low: 0.75
-loss_threshold_high: 1.0
+activation_model_path: /home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet18_best.pt
 
