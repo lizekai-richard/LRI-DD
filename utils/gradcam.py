@@ -11,10 +11,10 @@ from torchcam.utils import overlay_mask
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torchvision.transforms.functional import to_pil_image
-from utils.utils_gsam import get_network
+from utils.utils_gsam import get_network, get_dataset
 
 
-def demo():
+def demo_imagenet():
     # 初始化模型
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = resnet18(pretrained=True).eval().to(device)
@@ -85,6 +85,68 @@ def demo():
         print(f"Batch {batch_idx + 1}/{total_batches}, Memory Allocated: {torch.cuda.memory_allocated(device) / 1024 ** 2:.2f} MB")
 
 
+def demo_cifar10():
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # 创建数据集和数据加载器
+    channel = 3
+    im_size = (32, 32)
+    num_classes = 10
+    mean = [0.4914, 0.4822, 0.4465]
+    std = [0.2023, 0.1994, 0.2010]
+    
+    dst_train = datasets.CIFAR10("/home/kwang/big_space/lzk/dataset", train=True, download=True) # no augmentation
+    image, label = dst_train[21]
+
+    # 初始化模型
+    model = get_network("ResNet18", 3, num_classes, im_size, dist=False).eval()
+    model_state_dict = torch.load("/home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet18_best.pt")
+    model.load_state_dict(model_state_dict)
+    model = model.to(device)
+
+    target_layers = ['layer1', 'layer2', 'layer3', 'layer4']
+    output_root_dir = "./cifar10/"
+
+    plt.imshow(image)
+    plt.savefig(os.path.join(output_root_dir, "original_image.png"))
+    plt.axis('off')
+    plt.tight_layout()
+    plt.close()
+
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+    inputs = transform(image).to(device)
+
+    for target_layer in target_layers:
+        with SmoothGradCAMpp(model, target_layer=target_layer) as cam_extractor:
+            # 将预处理后的数据传入模型
+            outputs = model(inputs.unsqueeze(dim=0))
+            # 通过传入类别索引和模型输出获取CAM
+
+            activation_maps = cam_extractor([outputs[i].argmax().item() for i in range(outputs.size(0))], outputs)
+
+            for j in range(len(activation_maps[0])):
+                raw_cam_path = os.path.join(output_root_dir, f"{target_layer}_raw_cam.png")
+                os.makedirs(os.path.dirname(raw_cam_path), exist_ok=True)
+
+                plt.imshow(activation_maps[0][j].squeeze(0).cpu().numpy())
+                plt.axis('off')
+                plt.tight_layout()
+                plt.savefig(raw_cam_path)
+                plt.close()
+
+                img = image
+                cam_img = to_pil_image(activation_maps[0][j].squeeze(0), mode='F')
+                cam_img = cam_img.resize(img.size)
+                result = overlay_mask(img, cam_img, alpha=0.5)
+                overlay_cam_path = os.path.join(output_root_dir, f"{target_layer}_overlay_cam.png")
+                plt.imshow(result)
+                plt.axis('off')
+                plt.tight_layout()
+                plt.savefig(overlay_cam_path)
+                plt.close()
+                #################
+
+
 def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, model_path=None, dataset='imagenet-1k'):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -142,3 +204,8 @@ def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, model_p
             #     activation_maps_all.append(transforms.ToTensor()(result))
     activation_maps_all = torch.stack(activation_maps_all, dim=0)
     return activation_maps_all
+
+
+if __name__ == '__main__':
+    demo_cifar10()
+    

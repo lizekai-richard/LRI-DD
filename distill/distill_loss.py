@@ -34,14 +34,15 @@ def create_soft_mask(activation_maps, num_classes, ipc, descending=False):
     # activation_map: [num_classes * ipc, h, w]
     softmask = torch.zeros_like(activation_maps)
     if not descending:
-        for c in range(num_classes):
-            factor = torch.sum(torch.exp(1.0 * activation_maps[c * ipc: (c + 1) * ipc]))
-            softmask[c * ipc: (c + 1) * ipc] = torch.exp(1.0 * activation_maps[c * ipc: (c + 1) * ipc]) / factor 
+        for i in range(num_classes * ipc):
+            factor = torch.sum(torch.exp(activation_maps[i])).item()
+            softmask[i] = torch.exp(activation_maps[i]) / factor 
     else:
-        for c in range(num_classes):
-            factor = torch.sum(torch.exp(-1.0 * activation_maps[c * ipc: (c + 1) * ipc]))
-            softmask[c * ipc: (c + 1) * ipc] = torch.exp(-1.0 * activation_maps[c * ipc: (c + 1) * ipc]) / factor 
+        for i in range(num_classes * ipc):
+            factor = torch.sum(torch.exp(-1.0 * activation_maps[i])).item()
+            softmask[i] = torch.exp(-1.0 * activation_maps[i]) / factor 
     softmask = softmask.unsqueeze(dim=1)
+    print(softmask[0, 0].sum().item())
     return softmask
 
 
@@ -346,6 +347,9 @@ def main(args):
                                           model_path=args.activation_model_path, dataset=args.dataset)
     print("Size of activation maps: ", activation_maps.size())
 
+    mask = create_soft_mask(activation_maps, num_classes, args.ipc)
+    assert mask[0, 0].sum().item() == 1
+
     optimizer_y = torch.optim.SGD([label_syn], lr=args.lr_y, momentum=args.Momentum_y)
     vs = torch.zeros_like(label_syn)
     accumulated_grad = torch.zeros_like(label_syn)
@@ -425,7 +429,7 @@ def main(args):
 
                 wandb.log({"Pixels": wandb.Histogram(torch.nan_to_num(image_syn.detach().cpu()))}, step=it)
 
-                if args.ipc < 50 or args.force_save:
+                if args.ipc <= 50 or args.force_save:
                     upsampled = image_save
                     if args.dataset != "ImageNet":
                         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
@@ -563,10 +567,11 @@ def main(args):
         _, loss_indices = torch.sort(param_losses)
 
         threshold = int(args.loss_threshold_low * len(param_losses))
-        if (it // 500) % 2 == 0:
-            keep_indices = loss_indices[:threshold]
-        else:
-            keep_indices = loss_indices[threshold:]
+        # if (it // 500) % 2 == 0:
+        #     keep_indices = loss_indices[:threshold]
+        # else:
+        #     keep_indices = loss_indices[threshold:]
+        keep_indices = loss_indices[threshold:]
 
         param_loss += param_losses[keep_indices].sum()
         param_dist += param_dists[keep_indices].sum()
@@ -587,14 +592,14 @@ def main(args):
         
         grand_loss.backward()
 
-        if (it // 500) % 2 == 0:
-            mask = create_soft_mask(activation_maps, num_classes, args.ipc, descending=True)
-            print(mask.size())
-            print(image_syn.grad.size())
-            image_syn.grad *= mask
-        else:
-            mask = create_soft_mask(activation_maps, num_classes, args.ipc)
-            image_syn.grad *= mask
+        # if (it // 500) % 2 == 0:
+        #     mask = create_soft_mask(activation_maps, num_classes, args.ipc, descending=True)
+        #     image_syn.grad *= mask
+        # else:
+        #     mask = create_soft_mask(activation_maps, num_classes, args.ipc)
+        #     image_syn.grad *= mask
+        softmask = create_soft_mask(activation_maps, num_classes, args.ipc)
+        image_syn.grad *= softmask
 
         if grand_loss<=args.threshold:
             optimizer_y.step()
