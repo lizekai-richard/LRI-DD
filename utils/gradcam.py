@@ -142,5 +142,3 @@ def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, model_p
             #     activation_maps_all.append(transforms.ToTensor()(result))
     activation_maps_all = torch.stack(activation_maps_all, dim=0)
     return activation_maps_all
-
-
