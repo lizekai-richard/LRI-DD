@@ -21,6 +21,11 @@ import yaml
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+FIRST_BLOCK = 3456 + 128 + 128 + 128
+SECOND_BLOCK = 147456 + 128 + 128 + 128
+THIRD_BLOCK = 147456 + 128 + 128 + 128
+CLASSIFIER = 20480 + 10
+
 def manual_seed(seed=0):
 	random.seed(seed)
 	os.environ['PYTHONHASHSEED'] = str(seed)
@@ -30,19 +35,34 @@ def manual_seed(seed=0):
 	torch.cuda.manual_seed_all(seed)
 
 
-def create_soft_mask(activation_maps, num_classes, ipc, descending=False):
+def create_soft_mask(activation_maps, num_classes, ipc, scale_factor_high=0.8, scale_factor_low=0.3, mode='raw', descending=False):
     # activation_map: [num_classes * ipc, h, w]
-    softmask = torch.zeros_like(activation_maps)
-    if not descending:
+    if mode == 'raw':
+        softmask = activation_maps.unsqueeze(dim=1)
         for i in range(num_classes * ipc):
-            factor = torch.sum(torch.exp(activation_maps[i])).item()
-            softmask[i] = torch.exp(activation_maps[i]) / factor 
+            activation_mean = torch.mean(softmask[i, 0])
+            if not descending:
+                active_region = (activation_maps[i, 0] >= activation_mean).float() 
+                softmask[i, 0] = active_region + activation_maps[i, 0]
+            else:
+                active_region = (activation_maps[i, 0] <= activation_mean).float() 
+                softmask[i, 0] = active_region + (1 - activation_maps[i, 0])
+                # rescale_term = (softmask[i, 0] < 1.0).float()
+                # softmask[i, 0] = softmask[i, 0] + rescale_term
+            rescale_term = (softmask[i, 0] < 1.0).float()
+            softmask[i, 0] = softmask[i, 0] + rescale_term
     else:
-        for i in range(num_classes * ipc):
-            factor = torch.sum(torch.exp(-1.0 * activation_maps[i])).item()
-            softmask[i] = torch.exp(-1.0 * activation_maps[i]) / factor 
-    softmask = softmask.unsqueeze(dim=1)
-    print(softmask[0, 0].sum().item())
+        softmask = torch.zeros_like(activation_maps)
+        if not descending:
+            for i in range(num_classes * ipc):
+                factor = torch.sum(torch.exp(activation_maps[i])).item()
+                softmask[i] = torch.exp(activation_maps[i]) / factor 
+        else:
+            for i in range(num_classes * ipc):
+                factor = torch.sum(torch.exp(-1.0 * activation_maps[i])).item()
+                softmask[i] = torch.exp(-1.0 * activation_maps[i]) / factor 
+        softmask = softmask.unsqueeze(dim=1)
+
     return softmask
 
 
@@ -343,12 +363,10 @@ def main(args):
     label_syn.requires_grad=True
     label_syn = label_syn.to(args.device)
     
-    activation_maps = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, 
-                                          model_path=args.activation_model_path, dataset=args.dataset)
-    print("Size of activation maps: ", activation_maps.size())
-
-    mask = create_soft_mask(activation_maps, num_classes, args.ipc)
-    assert mask[0, 0].sum().item() == 1
+    activation_maps_shallow = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, target_layer='layer2',
+                                                  model_path=args.activation_model_path, dataset=args.dataset)
+    activation_maps_deep = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, target_layer='layer4',
+                                                  model_path=args.activation_model_path, dataset=args.dataset)
 
     optimizer_y = torch.optim.SGD([label_syn], lr=args.lr_y, momentum=args.Momentum_y)
     vs = torch.zeros_like(label_syn)
@@ -561,16 +579,19 @@ def main(args):
         param_loss = torch.tensor(0.0).to(args.device)
         param_dist = torch.tensor(0.0).to(args.device)
 
+        # param_loss = torch.nn.functional.mse_loss(student_params[-1], target_params, reduction="sum")
+        # param_dist = torch.nn.functional.mse_loss(starting_params, target_params, reduction="sum")
+
         param_losses = torch.nn.functional.mse_loss(student_params[-1], target_params, reduction="none")
         param_dists = torch.nn.functional.mse_loss(starting_params, target_params, reduction="none")
 
         _, loss_indices = torch.sort(param_losses)
 
         threshold = int(args.loss_threshold_low * len(param_losses))
-        # if (it // 500) % 2 == 0:
-        #     keep_indices = loss_indices[:threshold]
-        # else:
-        #     keep_indices = loss_indices[threshold:]
+        if (it // 500) % 2 == 1:
+            keep_indices = loss_indices[:threshold]
+        else:
+            keep_indices = loss_indices[threshold:]
         keep_indices = loss_indices[threshold:]
 
         param_loss += param_losses[keep_indices].sum()
@@ -592,13 +613,11 @@ def main(args):
         
         grand_loss.backward()
 
-        # if (it // 500) % 2 == 0:
-        #     mask = create_soft_mask(activation_maps, num_classes, args.ipc, descending=True)
-        #     image_syn.grad *= mask
-        # else:
-        #     mask = create_soft_mask(activation_maps, num_classes, args.ipc)
-        #     image_syn.grad *= mask
-        softmask = create_soft_mask(activation_maps, num_classes, args.ipc)
+        if (it // 500) % 2 == 1:
+            softmask = create_soft_mask(activation_maps_shallow, num_classes, args.ipc, descending=False)
+        else:
+            softmask = create_soft_mask(activation_maps_deep, num_classes, args.ipc, descending=False)
+        # softmask = create_soft_mask(activation_maps, num_classes, args.ipc, mode='raw')
         image_syn.grad *= softmask
 
         if grand_loss<=args.threshold:

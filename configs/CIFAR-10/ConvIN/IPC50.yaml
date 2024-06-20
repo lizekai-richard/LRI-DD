@@ -1,5 +1,5 @@
 dataset: CIFAR10
-device: [1,2,5,6]
+device: [1,2,3,4]
 
 ipc: 50
 syn_steps: 80
@@ -9,12 +9,12 @@ lr_teacher: 0.01
 buffer_path: /home/kwang/big_space/lzk/buffer_storage/cifar10/
 data_path: /home/kwang/big_space/lzk/dataset
 ema_decay: 0.995
-Iteration: 10000
+Iteration: 20000
 batch_syn: 500
 
 # wandb
 project: LRI-DD
-name: cifar10_ipc50_loss_with_activation
+name: cifar10_ipc50_depth_activation_by_layer_alter
 
 num_eval: 1
 eval_it: 500
@@ -32,5 +32,5 @@ max_start_epoch: 40
 lr_lr: 0.00001
 zca: True
 
-loss_threshold_low: 0.7
+loss_threshold_low: 0.5
 activation_model_path: /home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet18_best.pt

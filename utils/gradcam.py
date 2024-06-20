@@ -85,7 +85,7 @@ def demo():
         print(f"Batch {batch_idx + 1}/{total_batches}, Memory Allocated: {torch.cuda.memory_allocated(device) / 1024 ** 2:.2f} MB")
 
 
-def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, model_path=None, dataset='imagenet-1k'):
+def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, target_layer='layer4', model_path=None, dataset='imagenet-1k'):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if dataset == 'ImageNet-1k':
@@ -96,13 +96,13 @@ def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, model_p
         model_state_dict = torch.load(model_path)
         model.load_state_dict(model_state_dict)
         model = model.to(device)
-        target_layers = ['layer4']
+        target_layers = [target_layer]
     elif dataset == 'CIFAR100':
         model = get_network("ResNet50", 3, num_classes, im_size, dist=False).eval()
         model_state_dict = torch.load(model_path)
         model.load_state_dict(model_state_dict)
         model = model.to(device)
-        target_layers = ['layer4']
+        target_layers = [target_layer]
     # transform = ConvNeXt_Base_Weights.IMAGENET1K_V1.transforms()
     
     cam_extractor = SmoothGradCAMpp(model=model, target_layer=target_layers)
@@ -117,7 +117,6 @@ def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, model_p
         dataset = TensorDataset(copy.deepcopy(image_syn_c.detach()), copy.deepcopy(label_syn_c.detach()))
         if ipc <= 50:
             batch_size = ipc
-            
         else:
             batch_size = 32
             

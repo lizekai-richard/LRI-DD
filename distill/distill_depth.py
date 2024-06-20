@@ -8,7 +8,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.utils
 from tqdm import tqdm
-from utils.utils_baseline import get_dataset, get_network, get_eval_pool, plot_loss_interval, evaluate_synset, get_time, DiffAugment, ParamDiffAug
+from utils.utils_baseline import get_dataset, get_network, get_eval_pool, evaluate_synset, get_time, DiffAugment, plot_loss, ParamDiffAug
+from utils.gradcam import get_activation_maps
 import wandb
 import copy
 import random
@@ -17,8 +18,6 @@ from reparam_module import ReparamModule
 from utils.cfg import CFG as cfg
 import warnings
 import yaml
-import matplotlib.pyplot as plt
-
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -34,6 +33,36 @@ def manual_seed(seed=0):
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
 	torch.cuda.manual_seed_all(seed)
+
+
+def create_soft_mask(activation_maps, num_classes, ipc, mode='raw', descending=False):
+    # activation_map: [num_classes * ipc, h, w]
+    if mode == 'raw':
+        softmask = torch.zeros_like(activation_maps.unsqueeze(dim=1))
+        for i in range(num_classes * ipc):
+            activation_mean = torch.mean(activation_maps[i])
+            mask = torch.ones_like(activation_maps[i])
+
+            if not descending:
+                mask[activation_maps[i] >= activation_mean] = activation_maps[i][activation_maps[i] >= activation_mean] + 1
+            else:
+                mask[activation_maps[i] <= activation_mean] = 1 - activation_maps[i][activation_maps[i] <= activation_mean] + 1
+            softmask[i, 0] = mask
+
+    else:
+        softmask = torch.zeros_like(activation_maps)
+        if not descending:
+            for i in range(num_classes * ipc):
+                factor = torch.sum(torch.exp(activation_maps[i])).item()
+                softmask[i] = torch.exp(activation_maps[i]) / factor 
+        else:
+            for i in range(num_classes * ipc):
+                factor = torch.sum(torch.exp(-1.0 * activation_maps[i])).item()
+                softmask[i] = torch.exp(-1.0 * activation_maps[i]) / factor 
+        softmask = softmask.unsqueeze(dim=1)
+
+    return softmask
+
 
 def main(args):
 
@@ -76,13 +105,12 @@ def main(args):
         zca_trans = args.zca_trans
     else:
         zca_trans = None
-
+	    
     wandb.init(sync_tensorboard=False,
                project=args.project,
                name=args.name,
                job_type="CleanRepo",
                config=args,
-               settings=wandb.Settings(start_method='fork')
                )
 
     args = type('', (), {})()
@@ -255,8 +283,6 @@ def main(args):
     optimizer_img = torch.optim.SGD([image_syn], lr=args.lr_img, momentum=0.5)
     optimizer_lr = torch.optim.SGD([syn_lr], lr=args.lr_lr, momentum=0.5)
 
-
-    
     optimizer_img.zero_grad()
 
     ###
@@ -335,6 +361,10 @@ def main(args):
     label_syn.requires_grad=True
     label_syn = label_syn.to(args.device)
     
+    activation_maps_shallow = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, target_layer='layer2',
+                                                  model_path=args.activation_model_path, dataset=args.dataset)
+    activation_maps_deep = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, target_layer='layer4',
+                                               model_path=args.activation_model_path, dataset=args.dataset)
 
     optimizer_y = torch.optim.SGD([label_syn], lr=args.lr_y, momentum=args.Momentum_y)
     vs = torch.zeros_like(label_syn)
@@ -347,8 +377,6 @@ def main(args):
     curMax_times = 0
     current_accumulated_step = 0
 
-    all_accs = []
-    
     for it in range(0, args.Iteration+1):
         save_this_it = False
         wandb.log({"Progress": it}, step=it)
@@ -393,7 +421,6 @@ def main(args):
                     best_std[model_eval] = acc_test_std
                     save_this_it = True
                 print('Evaluate %d random %s, mean = %.4f std = %.4f\n-------------------------'%(len(accs_test), model_eval, acc_test_mean, acc_test_std))
-                all_accs.append(acc_test_mean)
                 wandb.log({'Accuracy/{}'.format(model_eval): acc_test_mean}, step=it)
                 wandb.log({'Max_Accuracy/{}'.format(model_eval): best_acc[model_eval]}, step=it)
                 wandb.log({'Std/{}'.format(model_eval): acc_test_std}, step=it)
@@ -403,7 +430,6 @@ def main(args):
             with torch.no_grad():
                 image_save = image_syn.cuda()
                 save_dir = os.path.join(".", "logged_files", args.dataset, str(args.ipc), args.model, wandb.run.name)
-                # save_dir = os.path.join(".", "logged_files", args.dataset, str(args.ipc), args.model, args.name)
 
                 if not os.path.exists(save_dir):
                     os.makedirs(os.path.join(save_dir,'Normal'))
@@ -419,7 +445,7 @@ def main(args):
 
                 wandb.log({"Pixels": wandb.Histogram(torch.nan_to_num(image_syn.detach().cpu()))}, step=it)
 
-                if args.ipc < 50 or args.force_save:
+                if args.ipc <= 50 or args.force_save:
                     upsampled = image_save
                     if args.dataset != "ImageNet":
                         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
@@ -440,7 +466,7 @@ def main(args):
 
                     if args.zca:
                         print("Device:", args.device)
-                        image_save = image_save.to(args.device)
+                        # image_save = image_save.to(args.device)
                         image_save = image_save.to("cpu")
                         image_save = args.zca_trans.inverse_transform(image_save)
                         image_save.cpu()
@@ -506,7 +532,7 @@ def main(args):
         
         start_epoch = np.random.randint(args.min_start_epoch, Upper_Bound)
         # start_epoch = np.random.randint(args.min_start_epoch, args.max_start_epoch)
-        
+
 
         starting_params = expert_trajectory[start_epoch]
         target_params = expert_trajectory[start_epoch+args.expert_epochs]
@@ -520,8 +546,6 @@ def main(args):
         param_loss_list = []
         param_dist_list = []
         indices_chunks = []
-
-        
 
 
         for step in range(args.syn_steps):
@@ -552,21 +576,19 @@ def main(args):
         param_loss = torch.tensor(0.0).to(args.device)
         param_dist = torch.tensor(0.0).to(args.device)
 
+        # param_loss = torch.nn.functional.mse_loss(student_params[-1], target_params, reduction="sum")
+        # param_dist = torch.nn.functional.mse_loss(starting_params, target_params, reduction="sum")
+
         param_losses = torch.nn.functional.mse_loss(student_params[-1], target_params, reduction="none")
         param_dists = torch.nn.functional.mse_loss(starting_params, target_params, reduction="none")
-        loss_indices = torch.arange(len(param_losses))
 
-        # first_layer = loss_indices[:int(0.2 * len(param_losses))]
-        # rest_layers = loss_indices[int(0.7 * len(param_losses)):]
+        loss_indices = torch.arange(len(param_losses))
+        shallow_layer_param_size = FIRST_BLOCK + SECOND_BLOCK
         
-        # param_loss += param_losses[first_layer].sum()
-        # param_dist += param_dists[first_layer].sum()
-        # param_loss += param_losses[rest_layers].sum()
-        # param_dist += param_dists[rest_layers].sum()
-        if (it // 100) % 2 == 0:
-            keep_indices = loss_indices[:FIRST_BLOCK + SECOND_BLOCK]
+        if (it // 500) % 2 == 1:
+            keep_indices = loss_indices[:shallow_layer_param_size]
         else:
-            keep_indices = loss_indices[FIRST_BLOCK + SECOND_BLOCK:]
+            keep_indices = loss_indices[shallow_layer_param_size:]
 
         param_loss += param_losses[keep_indices].sum()
         param_dist += param_dists[keep_indices].sum()
@@ -587,13 +609,19 @@ def main(args):
         
         grand_loss.backward()
 
-        if grand_loss<=args.threshold:
+        if (it // 500) % 2 == 1:
+            softmask = create_soft_mask(activation_maps_shallow, num_classes, args.ipc, descending=False)
+        else:
+            softmask = create_soft_mask(activation_maps_deep, num_classes, args.ipc, descending=False)
+        # softmask = create_soft_mask(activation_maps, num_classes, args.ipc, mode='raw')
+        image_syn.grad *= softmask
+
+        if grand_loss <= args.threshold:
             optimizer_y.step()
             optimizer_img.step()
             optimizer_lr.step()
         else:
             wandb.log({"falts": start_epoch}, step=it)
-            pass
 
 
         wandb.log({"Grand_Loss": param_loss.detach().cpu(),
@@ -605,10 +633,7 @@ def main(args):
         if it%10 == 0:
             print('%s iter = %04d, loss = %.4f' % (get_time(), it, grand_loss.item()))
         
-    
     wandb.finish()
-    print(all_accs)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Parameter Processing')
