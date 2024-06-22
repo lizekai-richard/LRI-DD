@@ -38,19 +38,16 @@ def manual_seed(seed=0):
 def create_soft_mask(activation_maps, num_classes, ipc, scale_factor_high=0.8, scale_factor_low=0.3, mode='raw', descending=False):
     # activation_map: [num_classes * ipc, h, w]
     if mode == 'raw':
-        softmask = activation_maps.unsqueeze(dim=1)
+        softmask = torch.zeros_like(activation_maps.unsqueeze(dim=1))
         for i in range(num_classes * ipc):
-            activation_mean = torch.mean(softmask[i, 0])
+            activation_mean = torch.mean(activation_maps[i])
+            mask = torch.ones_like(activation_maps[i])
+
             if not descending:
-                active_region = (activation_maps[i, 0] >= activation_mean).float() 
-                softmask[i, 0] = active_region + activation_maps[i, 0]
+                mask[activation_maps[i] >= activation_mean] = activation_maps[i][activation_maps[i] >= activation_mean] + 1
             else:
-                active_region = (activation_maps[i, 0] <= activation_mean).float() 
-                softmask[i, 0] = active_region + (1 - activation_maps[i, 0])
-                # rescale_term = (softmask[i, 0] < 1.0).float()
-                # softmask[i, 0] = softmask[i, 0] + rescale_term
-            rescale_term = (softmask[i, 0] < 1.0).float()
-            softmask[i, 0] = softmask[i, 0] + rescale_term
+                mask[activation_maps[i] <= activation_mean] = 1 - activation_maps[i][activation_maps[i] <= activation_mean] + 1
+            softmask[i, 0] = mask
     else:
         softmask = torch.zeros_like(activation_maps)
         if not descending:
