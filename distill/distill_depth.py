@@ -363,8 +363,12 @@ def main(args):
     
     activation_maps_shallow = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, target_layer='layer2',
                                                   model_path=args.activation_model_path, dataset=args.dataset)
+    
     activation_maps_deep = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, target_layer='layer4',
                                                model_path=args.activation_model_path, dataset=args.dataset)
+
+    softmask_shallow = create_soft_mask(activation_maps_shallow, num_classes, args.ipc, descending=False)
+    softmask_deep = create_soft_mask(activation_maps_deep, num_classes, args.ipc, descending=False)
 
     optimizer_y = torch.optim.SGD([label_syn], lr=args.lr_y, momentum=args.Momentum_y)
     vs = torch.zeros_like(label_syn)
@@ -585,7 +589,7 @@ def main(args):
         loss_indices = torch.arange(len(param_losses))
         shallow_layer_param_size = FIRST_BLOCK + SECOND_BLOCK
         
-        if (it // 500) % 2 == 1:
+        if (it // 100) % 2 == 0:
             keep_indices = loss_indices[:shallow_layer_param_size]
         else:
             keep_indices = loss_indices[shallow_layer_param_size:]
@@ -609,10 +613,10 @@ def main(args):
         
         grand_loss.backward()
 
-        if (it // 500) % 2 == 1:
-            softmask = create_soft_mask(activation_maps_shallow, num_classes, args.ipc, descending=False)
+        if (it // 100) % 2 == 0:
+            softmask = softmask_shallow
         else:
-            softmask = create_soft_mask(activation_maps_deep, num_classes, args.ipc, descending=False)
+            softmask = softmask_deep
         # softmask = create_soft_mask(activation_maps, num_classes, args.ipc, mode='raw')
         image_syn.grad *= softmask
 

@@ -547,7 +547,6 @@ def main(args):
         indices_chunks = []
 
         
-
         for step in range(args.syn_steps):
             if not indices_chunks:
                 indices = torch.randperm(len(syn_images))
@@ -584,11 +583,15 @@ def main(args):
 
         _, loss_indices = torch.sort(param_losses)
 
-        threshold = int(args.loss_threshold_low * len(param_losses))
-        if (it // 500) % 2 == 1:
+        threshold = int(args.loss_threshold * len(param_losses))
+        if (it // args.interval) % 2 == 0:
             keep_indices = loss_indices[:threshold]
         else:
             keep_indices = loss_indices[threshold:]
+        # if it < 500:
+        #     keep_indices = loss_indices[:threshold]
+        # else:
+        #     keep_indices = loss_indices[threshold:]
         keep_indices = loss_indices[threshold:]
 
         param_loss += param_losses[keep_indices].sum()
@@ -610,7 +613,8 @@ def main(args):
         
         grand_loss.backward()
 
-        if (it // 500) % 2 == 1:
+        if (it // args.interval) % 2 == 0:
+        # if it < 500:
             softmask = create_soft_mask(activation_maps_shallow, num_classes, args.ipc, descending=False)
         else:
             softmask = create_soft_mask(activation_maps_deep, num_classes, args.ipc, descending=False)

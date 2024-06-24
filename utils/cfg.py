@@ -44,6 +44,7 @@ CFG.epoch_eval_train = 1000
 
 # how many distillation steps to perform
 CFG.Iteration = 5000
+CFG.interval = 100
 
 # Learning rates
 CFG.lr_img = 1000  # learning rate for updating synthetic images
@@ -108,9 +109,8 @@ CFG.Momentum_y = 0.9
 CFG.project = 'TEST'
 CFG.name = 'RANDOM'
 # Threshold
-CFG.threshold = 1.0
-CFG.loss_threshold_high = 1.0
-CFG.loss_threshold_low = 1.0
+CFG.threshold = 1.
+CFG.loss_threshold = 1.0
 # Record loss
 CFG.record_loss = False
 

@@ -5,7 +5,7 @@ ipc: 10
 syn_steps: 80
 expert_epochs: 2
 zca: False
-lr_img: 50
+lr_img: 100
 lr_teacher: 0.01
 buffer_path: /home/kwang/big_space/lzk/buffer_storage/cifar10/
 data_path: /home/kwang/big_space/lzk/dataset
@@ -15,7 +15,7 @@ batch_syn: 500
 
 # wandb
 project: LRI-DD
-name: cifar10_ipc50_loss_scaled_activation_alter
+name: cifar10_ipc10_loss_scaled_activation_alter_100_dyn_map
 
 num_eval: 1
 eval_it: 500
@@ -35,5 +35,6 @@ expansion_end_epoch: 1000
 lr_lr: 0.00001
 zca: True
 
-loss_threshold_low: 0.5
+interval: 100
+loss_threshold: 0.5
 activation_model_path: /home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet18_best.pt
