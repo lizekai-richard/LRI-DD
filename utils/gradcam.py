@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torchvision.transforms.functional import to_pil_image
 from utils.utils_gsam import get_network
-
+# from utils_gsam import get_network
 
 def demo():
     # 初始化模型
@@ -85,20 +85,25 @@ def demo():
         print(f"Batch {batch_idx + 1}/{total_batches}, Memory Allocated: {torch.cuda.memory_allocated(device) / 1024 ** 2:.2f} MB")
 
 
-def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, target_layer='layer4', model_path=None, dataset='imagenet-1k'):
+def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, model="ResNet18", target_layer='layer4', model_path=None, dataset='imagenet-1k'):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if dataset == 'ImageNet-1k':
-        model = get_model("convnext_base", weights="IMAGENET1K_V1").eval().to(device)
+        model = get_model(model, weights=model_path).eval().to(device)
         target_layers = [model.features[-1]]
     elif dataset == 'CIFAR10':
-        model = get_network("ResNet18", 3, num_classes, im_size, dist=False).eval()
+        if model == 'ResNet18' or model == 'ResNet50':
+            target_layers = [target_layer]
+        else:
+            target_layers = [model.features[target_layer]]
+
+        model = get_network(model, 3, num_classes, im_size, dist=False).eval()
         model_state_dict = torch.load(model_path)
         model.load_state_dict(model_state_dict)
         model = model.to(device)
-        target_layers = [target_layer]
+
     elif dataset == 'CIFAR100':
-        model = get_network("ResNet50", 3, num_classes, im_size, dist=False).eval()
+        model = get_network(model, 3, num_classes, im_size, dist=False).eval()
         model_state_dict = torch.load(model_path)
         model.load_state_dict(model_state_dict)
         model = model.to(device)
@@ -141,3 +146,8 @@ def get_activation_maps(image_syn, label_syn, num_classes, ipc, im_size, target_
             #     activation_maps_all.append(transforms.ToTensor()(result))
     activation_maps_all = torch.stack(activation_maps_all, dim=0)
     return activation_maps_all
+
+
+if __name__ == '__main__':
+    model = get_network("ConvNet", 3, 10, dist=False)
+    print(model)

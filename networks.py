@@ -544,3 +544,11 @@ def ResNet18ImageNet(channel, num_classes):
 
 def ResNet6ImageNet(channel, num_classes):
     return ResNetImageNet(BasicBlock, [1,1,1,1], channel=channel, num_classes=num_classes)
+
+
+if __name__ == '__main__':
+    x = torch.randn(4, 3, 32, 32)
+    model = ResNet50(channel=3, num_classes=10)
+    feature = torch.nn.Sequential(*(list(model.children())[:-2]))
+    out = feature(x)
+    print(out.size())

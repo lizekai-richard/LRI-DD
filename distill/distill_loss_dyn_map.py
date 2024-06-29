@@ -484,11 +484,22 @@ def main(args):
                                 torch.nan_to_num(grid.detach().cpu()))}, step=it)
 
         if it % args.interval == 0:
-            activation_maps_shallow = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, target_layer='layer2',
-                                                          model_path=args.activation_model_path, dataset=args.dataset)
-            activation_maps_deep = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, target_layer='layer4',
-                                                       model_path=args.activation_model_path, dataset=args.dataset)
-     
+            activation_maps_shallow = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, model='ResNet50', 
+                                                          target_layer='layer2', model_path=args.activation_model_path, 
+                                                          dataset=args.dataset)
+            activation_maps_deep = get_activation_maps(image_syn, label_syn, num_classes, args.ipc, im_size, model='ResNet50', 
+                                                       target_layer='layer4', model_path=args.activation_model_path, 
+                                                       dataset=args.dataset)
+            
+            grid_shallow = torchvision.utils.make_grid(copy.deepcopy(activation_maps_shallow.detach().cpu()), nrow=10, normalize=True, scale_each=True)
+            grid_deep = torchvision.utils.make_grid(copy.deepcopy(activation_maps_deep.detach().cpu()), nrow=10, normalize=True, scale_each=True)
+            
+            # wandb.log({"Activation_Map_Shallow": wandb.Image(torch.nan_to_num(grid_shallow.detach().cpu()))}, step=it)
+            # wandb.log({"Activation_Map_Deep": wandb.Image(torch.nan_to_num(grid_deep.detach().cpu()))}, step=it)
+
+            torch.save(activation_maps_shallow.cpu(), os.path.join(save_dir, 'Normal',"activation_maps_shallow_{}.pt".format(it)))
+            torch.save(activation_maps_deep.cpu(), os.path.join(save_dir, 'Normal',"activation_maps_deep_{}.pt".format(it)))
+
         wandb.log({"Synthetic_LR": syn_lr.detach().cpu()}, step=it)
 
         student_net = get_network(args.model, channel, num_classes, im_size, dist=False).to(args.device)  # get a random model
@@ -544,7 +555,6 @@ def main(args):
         param_dist_list = []
         indices_chunks = []
 
-        
         for step in range(args.syn_steps):
             if not indices_chunks:
                 indices = torch.randperm(len(syn_images))

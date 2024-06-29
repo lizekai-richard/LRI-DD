@@ -15,7 +15,7 @@ batch_syn: 500
 
 # wandb
 project: LRI-DD
-name: cifar10_ipc10_loss_scaled_activation_alter_100_dyn_map
+name: cifar10_ipc10_loss_scaled_activation_alter_100_dyn_res50_map
 
 num_eval: 1
 eval_it: 500
@@ -37,4 +37,4 @@ zca: True
 
 interval: 100
 loss_threshold: 0.5
-activation_model_path: /home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet18_best.pt
+activation_model_path: /home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet50_best.pt

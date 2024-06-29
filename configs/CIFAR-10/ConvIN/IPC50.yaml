@@ -4,17 +4,17 @@ device: [0,1,2,3]
 ipc: 50
 syn_steps: 80
 expert_epochs: 2
-lr_img: 500
+lr_img: 1000
 lr_teacher: 0.01
 buffer_path: /home/kwang/big_space/lzk/buffer_storage/cifar10/
 data_path: /home/kwang/big_space/lzk/dataset
 ema_decay: 0.995
-Iteration: 10000
+Iteration: 20000
 batch_syn: 500
 
 # wandb
 project: LRI-DD
-name: cifar10_ipc50_loss_scaled_activation_alter_100_dyn_map
+name: cifar10_ipc50_loss_scaled_activation_alter_100_dyn_res50_map
 
 num_eval: 1
 eval_it: 500
@@ -34,4 +34,4 @@ zca: True
 
 interval: 100
 loss_threshold: 0.5
-activation_model_path: /home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet18_best.pt
+activation_model_path: /home/kwang/big_space/lzk/cifar_models/CIFAR10/ResNet50_best.pt

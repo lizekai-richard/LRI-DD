@@ -12,7 +12,7 @@ import copy
 import multiprocessing as mp
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="4"
 
 
 def train(args, channel, num_classes, im_size, trainloader, testloader):
